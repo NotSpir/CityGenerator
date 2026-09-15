@@ -335,7 +335,7 @@ public static class BuildingSetter
             step++;
         }
 
-        if (step <= 3)
+        if (step <= 1)
         {
             return 0;
         }

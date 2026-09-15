@@ -33,4 +33,14 @@ public class CityGenClient(HttpClient client)
         ApiResponseWrapper<List<BuildingData>>? wrapper = await response.Content.ReadFromJsonAsync<ApiResponseWrapper<List<BuildingData>>>();
         return wrapper?.Result;
     }
+    
+    public async Task<List<int>> GetPathAsync(RoadPlacementData data, int startId, int endId)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"api/CityGeneration/get-road-path?svid={startId}&evid={endId}",
+            data);
+        response.EnsureSuccessStatusCode();
+        ApiResponseWrapper<List<int>>? wrapper = await response.Content.ReadFromJsonAsync<ApiResponseWrapper<List<int>>>();
+        return wrapper?.Result;
+    }
 }

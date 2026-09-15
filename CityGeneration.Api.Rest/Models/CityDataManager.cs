@@ -1,5 +1,6 @@
 using CityGeneration.Core.BuildingModels;
 using CityGeneration.Core.Data.DataModels;
+using CityGeneration.Core.PathSearchModels;
 using CityGeneration.Core.RoadLayouts;
 using CityGeneration.Core.RoadModels;
 
@@ -25,9 +26,14 @@ public static class CityDataManager
         return new RoadNetwork(networkData.VertexList,  networkData.RoadSegments, networkData.VertexEdges, networkData.Sectors);
     }
     
-    public static List<BuildingData> GetBuildingsInNetwork(RoadNetwork roadNetwork)
+    public static List<BuildingData> GetBuildingsInNetwork(RoadNetwork roadNetwork, int cellSize)
     {
-        var buildings = BuildingSetter.SetBuildingDataInNetwork(ref roadNetwork, 16f, 4);
+        var buildings = BuildingSetter.SetBuildingDataInNetwork(ref roadNetwork, 8f, cellSize);
         return buildings;
+    }
+
+    public static List<int> GetPathBetweenTwoVIds(RoadNetwork roadNetwork, int start, int end)
+    {
+        return PathFinder.GetRouteFromVidToVid(roadNetwork, start, end);
     }
 }

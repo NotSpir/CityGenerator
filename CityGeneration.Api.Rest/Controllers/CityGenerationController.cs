@@ -28,7 +28,18 @@ public class CityGenerationController : ControllerBase
         [FromBody] RoadPlacementData roadNetworkData)
     {
         var roadNetwork = CityDataManager.LoadRoadNetwork(roadNetworkData);
-        var result = CityDataManager.GetBuildingsInNetwork(roadNetwork);
+        var result = CityDataManager.GetBuildingsInNetwork(roadNetwork, roadNetworkData.cellSize);
+        return Ok(new { result });
+    }
+    
+    [HttpPost($"get-road-path")]
+    public async Task<IActionResult> GenerateBuildings(
+        [FromBody] RoadPlacementData roadNetworkData,
+        [FromQuery] int svid,
+        [FromQuery] int evid)
+    {
+        var roadNetwork = CityDataManager.LoadRoadNetwork(roadNetworkData);
+        var result = CityDataManager.GetPathBetweenTwoVIds(roadNetwork, svid, evid);
         return Ok(new { result });
     }
 }

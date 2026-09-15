@@ -21,37 +21,39 @@
     {
         
     }
-    <BECanvas Width="@width" Height="@height" @ref="CanvasRef"></BECanvas>
-    
-    <div class="row-cols-2">
-        <button class="btn btn-primary" @onclick="OnRoadButtonClick">Generate city</button>
-        <button class="btn btn-primary" @onclick="PlaceBuildings">Place Buildings</button>
+    <div @onclick="HandleCanvasClick">
+        <BECanvas Width="@width" Height="@height" @ref="CanvasRef"></BECanvas>
     </div>
     
-    <div class="row">
-        <div class="mb-2">
+    <div class="row g-3">
+        <button class="btn btn-primary col-auto" @onclick="OnRoadButtonClick">Generate city</button>
+        <button class="btn btn-primary col-auto" @onclick="PlaceBuildings">Place Buildings</button>
+    </div>
+    
+    <div class="row g-3">
+        <div class="col-auto">
             <label class="form-label">Seed</label>
-            <input type="number" class="form-control" @bind="seed" />
+            <input type="number" class="form-control" min="0" max="65535" @bind="seed" />
         </div>
-        <div class="mb-2">
+        <div class="col-auto">
             <label class="form-label">Width</label>
-            <input type="number" class="form-control" @bind="width" />
+            <input type="number" class="form-control" min="0" max="1920" @bind="width" />
         </div>
-        <div class="mb-2">
+        <div class="col-auto">
             <label class="form-label">Height</label>
-            <input type="number" class="form-control" @bind="height" />
+            <input type="number" class="form-control" min="0" max="1920" @bind="height" />
         </div>
-        <div class="mb-2">
-            <label class="form-label">Split Iterations</label>
-            <input type="number" class="form-control" @bind="splitIterations" />
+        <div class="col-auto">
+            <label class="form-label">Iterations</label>
+            <input type="number" class="form-control" min="0" max="15" @bind="splitIterations" />
         </div>
-        <div class="mb-2">
+        <div class="col-auto">
             <label class="form-label">Block Chance</label>
-            <input type="number" step="0.01" class="form-control" @bind="blockChance" />
+            <input type="number" step="0.01" class="form-control" min="0" max="1" @bind="blockChance" />
         </div>
-        <div class="mb-2">
+        <div class="col-auto">
             <label class="form-label">Deviation</label>
-            <input type="number" step="0.01" class="form-control" @bind="deviation" />
+            <input type="number" step="0.01" class="form-control" min="0" max="0.45" @bind="deviation" />
         </div>
     </div>
 </div>
@@ -65,6 +67,10 @@
     int splitIterations = 0;
     float blockChance = 0.01f;
     float deviation = 0.03f;
+
+    //Pathfinding values.
+    int pathIdx1 = -1;
+    int pathIdx2 = -1;
     
     [Parameter] public int? SelectedVertexId { get; set; }
     [Parameter] public double? ClickRadius { get; set; } = 10;
@@ -82,10 +88,12 @@
     [JSInvokable]
     public async ValueTask RenderRoadsInBlazor()
     {
+        pathIdx1 = -1;
+        pathIdx2 = -1;
         var val = _roadData.Value;
         await _context.BeginBatchAsync();
         
-        await _context.ClearRectAsync(0, 0, 2000, 2000);
+        await _context.ClearRectAsync(0, 0, width, height);
         //await _context.SetFillStyleAsync("#003366");
         //await _context.FillRectAsync(0, 0, 600, 600);
         await _context.SetStrokeStyleAsync("#000000");
@@ -98,7 +106,6 @@
             if (edge.Type == "Old-Split") continue;
             var v = val.VertexList[edge.StartId];
             var v1 = val.VertexList[edge.EndId];
-            Console.WriteLine($"{edge.StartId}-{edge.EndId}: ({v.X}; {v.Y}) - ({v1.X}; {v1.Y})");
             await _context.BeginPathAsync();
             await _context.MoveToAsync(v.X + width/2f, v.Y + height/2f);
             await _context.LineToAsync(v1.X + width/2f, v1.Y + height/2f);
@@ -141,6 +148,7 @@
     //City Receival logic
     private RoadPlacementData? _roadData;
     private List<BuildingData> _buildings = [];
+    List<int>? _pointPath = [];
     private bool _isLoading = false;
     
     private async Task OnRoadButtonClick()
@@ -151,6 +159,8 @@
             var data = await CityGenClient.GenerateCityAsync(seed, width/2, height/2, splitIterations, blockChance, deviation);
             if (data is not null)
             {
+                _pointPath = [];
+                _buildings = [];
                 _roadData = data;
                 Console.WriteLine("Successfully generated road placement data");
                 await RenderRoadsInBlazor();
@@ -190,5 +200,74 @@
         {
             _isLoading = false;
         }
+    }
+
+    //Pathfinding between two points
+    private async Task HandleCanvasClick(MouseEventArgs e)
+    {
+        if (!_roadData.HasValue) return;
+        
+        int canvasX = (int)e.OffsetX;
+        int canvasY = (int)e.OffsetY;
+        Vector2 canvasPos = new Vector2(canvasX- width/2f, canvasY- height/2f) ;
+        int closestIdx = -1;
+        float closestDist = int.MaxValue;
+        for (int i = 0; i < _roadData.Value.VertexList.Count; i++ )
+        {
+            var v = _roadData.Value.VertexList[i];
+            var dist = (v-canvasPos).Length();
+            if (dist < closestDist)
+            {
+                closestIdx = i;
+                closestDist = dist;
+            }
+        }
+
+        if (closestIdx == -1) return;
+        
+        if (pathIdx1 == -1 || pathIdx2 != -1)
+        {
+            pathIdx1 = closestIdx;
+            Console.WriteLine("Selected: ", pathIdx1);
+            return;
+        }
+        pathIdx2 = closestIdx;
+        var pathStart = _roadData.Value.VertexList[pathIdx1];
+        var pathEnd = _roadData.Value.VertexList[pathIdx2];
+        await RenderPathInBlazor();
+        _pointPath = await CityGenClient.GetPathAsync(_roadData.Value, pathIdx1, pathIdx2);
+        Console.WriteLine($"Finding path from: {pathIdx1}-({pathStart.X}, {pathStart.Y}) to: {pathIdx2}-({pathEnd.X}, {pathEnd.Y})");
+        await RenderPathInBlazor("#fff200");
+        pathIdx2 = -1;
+        pathIdx1 = -1;
+    }
+    
+    //Rendering path between 2 points.
+    public async ValueTask RenderPathInBlazor(string colorString = "#000000")
+    {
+        if (_pointPath is null) return;
+        if (_pointPath.Count <= 1) return;
+        if (_roadData is null) return;
+        
+        Console.WriteLine("Render Path started");
+        await _context.SetStrokeStyleAsync(colorString);
+        await _context.SetLineWidthAsync(4);
+        Console.WriteLine(_pointPath[0]);
+        for (int i = 0; i < _pointPath.Count-1; i++)
+        {
+            var v = _roadData.Value.VertexList[_pointPath[i]];
+            var v1 = _roadData.Value.VertexList[_pointPath[(i+1)%_pointPath.Count]];
+            /*
+            Console.WriteLine($"Path between");
+            Console.WriteLine($"{_pointPath[i]} {v.X} {v.Y}");
+            Console.WriteLine($"{_pointPath[i+1]} {v1.X} {v1.Y}");
+            */
+            
+            await _context.BeginPathAsync();
+            await _context.MoveToAsync(v.X + width/2f, v.Y + height/2f);
+            await _context.LineToAsync(v1.X + width/2f, v1.Y + height/2f);
+            await _context.StrokeAsync();
+        }
+        await _context.EndBatchAsync();
     }
 }

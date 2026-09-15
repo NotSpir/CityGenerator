@@ -8,4 +8,5 @@ public record struct RoadPlacementData()
     public List<RoadSegment> RoadSegments { get; set; }
     public Dictionary<int, List<int>> VertexEdges { get; set; }
     public List<RoadSector> Sectors { get; set;  }
+    public int cellSize = 4;
 }
