@@ -1,0 +1,194 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject CityGenClient CityGenClient
+
+@using CityGeneration.Blazor.Clients
+@using CityGeneration.Contracts.Rest.Entities
+@using CityGeneration.Core.Data.DataModels
+@using global::Blazor.Extensions
+@using global::Blazor.Extensions.Canvas
+@using global::Blazor.Extensions.Canvas.Canvas2D
+
+
+<PageTitle>Home</PageTitle>
+
+<div class="city-container">
+    @if (!_roadData.HasValue)
+    {
+        <p>No city generated</p>
+    }
+    else
+    {
+        
+    }
+    <BECanvas Width="@width" Height="@height" @ref="CanvasRef"></BECanvas>
+    
+    <div class="row-cols-2">
+        <button class="btn btn-primary" @onclick="OnRoadButtonClick">Generate city</button>
+        <button class="btn btn-primary" @onclick="PlaceBuildings">Place Buildings</button>
+    </div>
+    
+    <div class="row">
+        <div class="mb-2">
+            <label class="form-label">Seed</label>
+            <input type="number" class="form-control" @bind="seed" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Width</label>
+            <input type="number" class="form-control" @bind="width" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Height</label>
+            <input type="number" class="form-control" @bind="height" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Split Iterations</label>
+            <input type="number" class="form-control" @bind="splitIterations" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Block Chance</label>
+            <input type="number" step="0.01" class="form-control" @bind="blockChance" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Deviation</label>
+            <input type="number" step="0.01" class="form-control" @bind="deviation" />
+        </div>
+    </div>
+</div>
+<script src='_content/Blazor.Extensions.Canvas/blazor.extensions.canvas.js'></script>
+
+@code {
+
+    int seed = 0;
+    int width = 512;
+    int height = 512;
+    int splitIterations = 0;
+    float blockChance = 0.01f;
+    float deviation = 0.03f;
+    
+    [Parameter] public int? SelectedVertexId { get; set; }
+    [Parameter] public double? ClickRadius { get; set; } = 10;
+    protected BECanvasComponent CanvasRef;
+    private Canvas2DContext _context;
+    private DateTime _lastRenderTime;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        _context = await CanvasRef.CreateCanvas2DAsync();
+        //await JsRuntime.InvokeAsync<object>("initRenderJS", DotNetObjectReference.Create(this));
+        await base.OnInitializedAsync();
+    }
+
+    [JSInvokable]
+    public async ValueTask RenderRoadsInBlazor()
+    {
+        var val = _roadData.Value;
+        await _context.BeginBatchAsync();
+        
+        await _context.ClearRectAsync(0, 0, 2000, 2000);
+        //await _context.SetFillStyleAsync("#003366");
+        //await _context.FillRectAsync(0, 0, 600, 600);
+        await _context.SetStrokeStyleAsync("#000000");
+        await _context.SetLineWidthAsync(3);
+        
+
+        foreach (var edge in val.RoadSegments)
+        {
+            if (edge.Type == "Old-Full") continue;
+            if (edge.Type == "Old-Split") continue;
+            var v = val.VertexList[edge.StartId];
+            var v1 = val.VertexList[edge.EndId];
+            Console.WriteLine($"{edge.StartId}-{edge.EndId}: ({v.X}; {v.Y}) - ({v1.X}; {v1.Y})");
+            await _context.BeginPathAsync();
+            await _context.MoveToAsync(v.X + width/2f, v.Y + height/2f);
+            await _context.LineToAsync(v1.X + width/2f, v1.Y + height/2f);
+            await _context.StrokeAsync();
+        }
+        await _context.EndBatchAsync();
+    }
+    
+    public async ValueTask RenderBuildingsInBlazor()
+    {
+        await _context.BeginBatchAsync();
+        await _context.SetStrokeStyleAsync("#919191");
+        foreach (var b in _buildings)
+        {
+            var v = b.Corners[0];
+            var v1 = b.Corners[1];
+            var v2 = b.Corners[2];
+            var v3 = b.Corners[3];
+            
+            await _context.BeginPathAsync();
+            await _context.MoveToAsync(v.X + width/2f, v.Y + height/2f);
+            await _context.LineToAsync(v1.X + width/2f, v1.Y + height/2f);
+            await _context.StrokeAsync();
+            await _context.BeginPathAsync();
+            await _context.MoveToAsync(v1.X + width/2f, v1.Y + height/2f);
+            await _context.LineToAsync(v2.X + width/2f, v2.Y + height/2f);
+            await _context.StrokeAsync();
+            await _context.BeginPathAsync();
+            await _context.MoveToAsync(v2.X + width/2f, v2.Y + height/2f);
+            await _context.LineToAsync(v3.X + width/2f, v3.Y + height/2f);
+            await _context.StrokeAsync();
+            await _context.BeginPathAsync();
+            await _context.MoveToAsync(v3.X + width/2f, v3.Y + height/2f);
+            await _context.LineToAsync(v.X + width/2f, v.Y + height/2f);
+            await _context.StrokeAsync();
+        }
+        await _context.EndBatchAsync();
+    }
+    
+    //City Receival logic
+    private RoadPlacementData? _roadData;
+    private List<BuildingData> _buildings = [];
+    private bool _isLoading = false;
+    
+    private async Task OnRoadButtonClick()
+    {
+        _isLoading = true;
+        try
+        {
+            var data = await CityGenClient.GenerateCityAsync(seed, width/2, height/2, splitIterations, blockChance, deviation);
+            if (data is not null)
+            {
+                _roadData = data;
+                Console.WriteLine("Successfully generated road placement data");
+                await RenderRoadsInBlazor();
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"Request failed: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    
+    
+    private async Task PlaceBuildings()
+    {
+        _isLoading = true;
+        try
+        {
+            if (_roadData is null) return;
+            
+            var data = await CityGenClient.GenerateBuildingsAsync(_roadData.Value);
+            if (data is not null)
+            {
+                _buildings = data;
+                Console.WriteLine("Successfully generated building data");
+                RenderBuildingsInBlazor();
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"Request failed: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

@@ -1,0 +1,6 @@
+@CityGeneration.Api.Rest_HostAddress = http://localhost:5095
+
+GET {{CityGeneration.Api.Rest_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

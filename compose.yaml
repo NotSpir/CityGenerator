@@ -1,0 +1,19 @@
+﻿services:
+  citygeneration.api.rest:
+    image: citygeneration.api.rest
+    build:
+      context: .
+      dockerfile: CityGeneration.Api.Rest/Dockerfile
+
+  citygeneration.api.grpc:
+    image: citygeneration.api.grpc
+    build:
+      context: .
+      dockerfile: CityGeneration.Api.gRPC/Dockerfile
+
+  citygeneration.blazor:
+    image: citygeneration.blazor
+    build:
+      context: .
+      dockerfile: CityGeneration.Blazor/Dockerfile
+
