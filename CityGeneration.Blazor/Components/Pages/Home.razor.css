@@ -1,0 +1,10 @@
+.city-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    min-height: 100vh;
+    padding: 1rem;
+    box-sizing: border-box;
+}
